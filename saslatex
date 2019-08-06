@@ -1,0 +1,98 @@
+
+data adsl;
+  format region $20. trt01a $4.;
+  infile datalines dlm=',';
+  input region enrlfn randfn saffn trt01a;
+  datalines;
+    North America, 1, 1, 1, Red
+	North America, 1, 1, 1, Blue
+	North America, 1, 1, 1, Red
+	North America, 1, 1, 0, 
+	Eastern Europe, 1, 1, 1, Red
+	Eastern Europe, 1, 1, 1, Blue
+	Eastern Europe, 1, 1, 1, Red
+	Eastern Europe, 1, 1, 0, 
+	Western Europe, 1, 1, 1, Blue
+	Western Europe, 1, 1, 1, Red
+	Western Europe, 1, 1, 1, Red
+	Western Europe, 1, 1, 0,
+  ;
+run;
+
+
+proc report data=adsl out=textable(drop=_BREAK_);
+  columns region enrlfn randfn saffn trt01a, saffn ;
+  define region / group 'Geographic region';
+  define enrlfn / analysis sum 'Enrolled' ;
+  define randfn / analysis sum 'Randomized';
+  define trt01a / across 'Treatment received';
+  define saffn / analysis sum 'Exposed to study treatment';
+quit;
+
+data textable2;
+  set textable;
+  enrlfn2 = put(enrlfn, 8.0);
+  randfn2 = put(randfn, 8.0);
+  saffn2 = put(saffn, 8.0);
+  _c5_2 = put(_c5_, 8.0);
+  _c6_2 = put(_c6_, 8.0) || "\\" ;
+run;
+
+data _null_;
+  set textable nobs = n;
+  file "Q:\shared\adam omidpanah\wuss 2019\test.tex" dlm="&";
+
+  enrlfn2 = put(enrlfn, 8.0);
+  randfn2 = put(randfn, 8.0);
+  saffn2 = put(saffn, 8.0);
+  _c5_2 = put(_c5_, 8.0);
+  _c6_2 = put(_c6_, 8.0) || "\\" ;
+
+  if _n_ = 1 then do;
+  put "\documentclass{standalone}";
+  put "\begin{document}";
+  put "\begin{tabular}{lrrrrr}";
+  put "& & & & \multicolumn{2}{c}{Treatment received} \\"; 
+  put "Geographic Region & Enrolled & Randomized & Exposed to treatment & Red & Blue \\ \hline";
+  end;
+
+  put region enrlfn2 randfn2 saffn2 _c5_2 _c6_2;
+
+  if _n_ = n then do;
+  put  "\hline \end{tabular}";
+  put "\end{document}";
+  end;
+run;
+proc sql;
+ select count(distinct usubjid) into :enr from adsl;
+ select count(distinct usubjid) into :ran from adsl where randfl = "Y";
+ select count(distinct usubjid) into :exp from adsl where saffl = "Y";
+ select count(distinct usubjid) into :red from adsl where saffl = "Y" and trt01a = "Red";
+ select count(distinct usubjid) into :blue from adsl where saffl = "Y" and trt01a = "Blue";
+quit; 
+
+
+%let tikz = \documentclass{article}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows}
+\begin{document}
+\begin{center}
+  \begin{tikzpicture}[auto, 
+    block/.style={rectangle, draw=black, thick, fill=white, text centered, text width=8em},
+    line/.style={draw, thick,  -latex'}]
+    \matrix [column sep=5mm,row sep=3mm,every node/.style=block] {
+      \node (enr) {Enrolled \\(N=&enr)}%quote(;) & \\
+      \node (ran) {Randomized \\(N=&ran)}%quote(;) & \\
+      \node (exp) {Exposed to study treatment \\(N=&exp)}%quote(;) & \\
+      \node (red) {Red \\(N=&red)}%quote(;) & \node (blue) {Blue \\(N=&red)}%quote(;) \\
+    }%quote(;)
+    \begin{scope}[every path/.style=line]
+     \path (enr) -- (ran) %quote(;)
+     \path (ran) -- (exp) %quote(;)
+     \path (exp) -- (red) %quote(;)
+     \path (exp) -- (blue) %quote(;)
+    \end{scope}
+  \end{tikzpicture}
+\end{center}
+\end{document};
+%put &tikz;
